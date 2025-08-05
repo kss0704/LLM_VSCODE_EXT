@@ -49,7 +49,6 @@ export class CodebaseHandler {
                     if (err) {
                         reject(err);
                     } else {
-                        // this.lastID gives the inserted row ID
                         resolve(this.lastID ?? 0);
                     }
                 }
@@ -72,7 +71,6 @@ export class CodebaseHandler {
             }
 
             const fileId = row?.id;
-
             const chunks = this.smartChunkContent(content, extension);
 
             const insertChunks = (id: number) => {
