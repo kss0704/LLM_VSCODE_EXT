@@ -1,164 +1,113 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
-import * as vscode from 'vscode';
-import { Database, RunResult } from 'sqlite3';
-import { encoding_for_model } from 'tiktoken';
+import { promisify } from 'util';
+import * as sqlite3 from 'sqlite3';
+import { TokenTextSplitter } from './utils/tokenSplitter';
 
-interface FileInfo {
-  filePath: string;
-  extension: string;
-  fileType: string;
-  size: number;
-  lines: number;
-  tokens: number;
-  priority: number;
-  hash: string;
-  contentPreview: string;
-}
+const readFileAsync = promisify(fs.readFile);
 
 export class CodebaseHandler {
-  private db: Database;
-  private encoding: any;
-  private excludedDirs = ['node_modules', 'out', '.git', '.vscode'];
+    private db: sqlite3.Database;
+    private splitter: TokenTextSplitter;
 
-  constructor(private storagePath: string) {
-    const dbPath = path.join(this.storagePath, 'codebase.db');
-    this.db = new Database(dbPath);
-    try {
-      this.encoding = encoding_for_model('gpt-3.5-turbo');
-    } catch {
-      this.encoding = null;
+    constructor(dbPath: string) {
+        this.db = new sqlite3.Database(dbPath);
+        this.splitter = new TokenTextSplitter();
+        this.initializeDatabase();
     }
-  }
 
-  async initialize() {
-    const statements = [
-      `CREATE TABLE IF NOT EXISTS files (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_path TEXT UNIQUE,
-        file_hash TEXT,
-        extension TEXT,
-        tokens INTEGER,
-        content_preview TEXT,
-        processed BOOLEAN DEFAULT 0
-      )`,
-      `CREATE TABLE IF NOT EXISTS chunks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_id INTEGER,
-        chunk_index INTEGER,
-        content TEXT,
-        tokens INTEGER,
-        start_line INTEGER,
-        end_line INTEGER,
-        chunk_type TEXT,
-        FOREIGN KEY (file_id) REFERENCES files(id)
-      )`
-    ];
+    private initializeDatabase() {
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filepath TEXT UNIQUE,
+                content TEXT
+            );
+        `);
 
-    for (const sql of statements) {
-      await new Promise<void>((resolve, reject) => {
-        this.db.run(sql, err => (err ? reject(err) : resolve()));
-      });
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS file_chunks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id INTEGER,
+                chunk_index INTEGER,
+                content TEXT,
+                FOREIGN KEY(file_id) REFERENCES files(id)
+            );
+        `);
     }
-  }
 
-  async clearDatabase() {
-    await new Promise<void>((resolve, reject) => {
-      this.db.run('DELETE FROM files', err => (err ? reject(err) : resolve()));
-    });
-    await new Promise<void>((resolve, reject) => {
-      this.db.run('DELETE FROM chunks', err => (err ? reject(err) : resolve()));
-    });
-  }
-
-  async addFile(filePath: string, content: string): Promise<void> {
-    const fileHash = crypto.createHash('md5').update(content).digest('hex');
-    const extension = path.extname(filePath);
-    const tokens = this.countTokens(content);
-    const preview = content.slice(0, 1000);
-
-    await new Promise<void>((resolve, reject) => {
-      this.db.run(
-        `INSERT OR IGNORE INTO files (file_path, file_hash, extension, tokens, content_preview, processed)
-         VALUES (?, ?, ?, ?, ?, 0)`,
-        [filePath, fileHash, extension, tokens, preview],
-        err => (err ? reject(err) : resolve())
-      );
-    });
-  }
-
-  async addChunks(filePath: string, content: string): Promise<void> {
-    const fileRow: any = await new Promise((resolve, reject) => {
-      this.db.get(
-        'SELECT id FROM files WHERE file_path = ?',
-        [filePath],
-        (err, row) => (err ? reject(err) : resolve(row))
-      );
-    });
-    if (!fileRow) return;
-
-    const fileId = fileRow.id;
-    const lines = content.split('\n');
-    let chunkLines: string[] = [];
-    let chunkTokens = 0;
-    let startLine = 0;
-    let chunkIndex = 0;
-
-    const pushChunk = async () => {
-      const chunkContent = chunkLines.join('\n');
-      const tokens = this.countTokens(chunkContent);
-      const endLine = startLine + chunkLines.length - 1;
-      await new Promise<void>((resolve, reject) => {
-        this.db.run(
-          `INSERT INTO chunks (file_id, chunk_index, content, tokens, start_line, end_line, chunk_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [fileId, chunkIndex++, chunkContent, tokens, startLine, endLine, 'general'],
-          err => (err ? reject(err) : resolve())
-        );
-      });
-      startLine = endLine + 1;
-      chunkLines = [];
-      chunkTokens = 0;
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const lineTokens = this.countTokens(line);
-      if (chunkTokens + lineTokens > 2000) {
-        await pushChunk();
-      }
-      chunkLines.push(line);
-      chunkTokens += lineTokens;
+    private async readFileContent(filePath: string): Promise<string> {
+        return await readFileAsync(filePath, 'utf-8');
     }
-    if (chunkLines.length) await pushChunk();
 
-    await new Promise<void>((resolve, reject) => {
-      this.db.run('UPDATE files SET processed = 1 WHERE id = ?', [fileId], err => (err ? reject(err) : resolve()));
-    });
-  }
-
-  async processDirectory(dir: string): Promise<void> {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-
-      if (this.excludedDirs.some(excluded => fullPath.includes(excluded))) {
-        continue; // Skip excluded directories
-      }
-
-      if (entry.isDirectory()) {
-        await this.processDirectory(fullPath);
-      } else if (entry.isFile()) {
-        const content = fs.readFileSync(fullPath, 'utf8');
-        await this.addFile(fullPath, content);
-        await this.addChunks(fullPath, content);
-      }
+    private async storeFileContent(filePath: string, content: string): Promise<number> {
+        return new Promise((resolve, reject) => {
+            this.db.run(
+                `INSERT OR IGNORE INTO files (filepath, content) VALUES (?, ?)`,
+                [filePath, content],
+                function (this: sqlite3.RunResult, err: Error | null) {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(this.lastID);
+                    }
+                }
+            );
+        });
     }
-  }
 
-  private countTokens(text: string): number {
-    if (!this.encoding) return Math.ceil(text.length / 4);
-    return this.encoding.encode(text).length;
-  }
+    private smartChunkContent(content: string, extension: string): string[] {
+        return this.splitter.smartSplit(content, extension);
+    }
+
+    public async processFile(filePath: string): Promise<void> {
+        const content = await this.readFileContent(filePath);
+        const extension = path.extname(filePath);
+
+        this.db.get(`SELECT id FROM files WHERE filepath = ?`, [filePath], (err: Error | null, row: any) => {
+            if (err) {
+                console.error('Failed to retrieve file ID:', err);
+                return;
+            }
+
+            const fileId = row?.id;
+
+            if (!fileId) {
+                this.storeFileContent(filePath, content).then((newFileId) => {
+                    const chunks = this.smartChunkContent(content, extension);
+                    chunks.forEach((chunk: string, index: number) => {
+                        this.db.run(
+                            `INSERT INTO file_chunks (file_id, chunk_index, content) VALUES (?, ?, ?)`,
+                            [newFileId, index, chunk],
+                            (err: Error | null) => {
+                                if (err) {
+                                    console.error('Failed to insert chunk:', err);
+                                }
+                            }
+                        );
+                    });
+                }).catch((error) => console.error('Store file failed:', error));
+            } else {
+                this.db.run('DELETE FROM file_chunks WHERE file_id = ?', [fileId], (err: Error | null) => {
+                    if (err) {
+                        console.error('Failed to delete old chunks:', err);
+                        return;
+                    }
+
+                    const chunks = this.smartChunkContent(content, extension);
+                    chunks.forEach((chunk: string, index: number) => {
+                        this.db.run(
+                            `INSERT INTO file_chunks (file_id, chunk_index, content) VALUES (?, ?, ?)`,
+                            [fileId, index, chunk],
+                            (err: Error | null) => {
+                                if (err) {
+                                    console.error('Failed to insert chunk:', err);
+                                }
+                            }
+                        );
+                    });
+                });
+            }
+        });
+    }
 }
