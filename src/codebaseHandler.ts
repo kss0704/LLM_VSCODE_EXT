@@ -49,7 +49,8 @@ export class CodebaseHandler {
                     if (err) {
                         reject(err);
                     } else {
-                        resolve(this.lastID);
+                        // this.lastID gives the inserted row ID
+                        resolve(this.lastID ?? 0);
                     }
                 }
             );
@@ -72,40 +73,35 @@ export class CodebaseHandler {
 
             const fileId = row?.id;
 
-            if (!fileId) {
-                this.storeFileContent(filePath, content).then((newFileId) => {
-                    const chunks = this.smartChunkContent(content, extension);
-                    chunks.forEach((chunk: string, index: number) => {
-                        this.db.run(
-                            `INSERT INTO file_chunks (file_id, chunk_index, content) VALUES (?, ?, ?)`,
-                            [newFileId, index, chunk],
-                            (err: Error | null) => {
-                                if (err) {
-                                    console.error('Failed to insert chunk:', err);
-                                }
+            const chunks = this.smartChunkContent(content, extension);
+
+            const insertChunks = (id: number) => {
+                chunks.forEach((chunk: string, index: number) => {
+                    this.db.run(
+                        `INSERT INTO file_chunks (file_id, chunk_index, content) VALUES (?, ?, ?)`,
+                        [id, index, chunk],
+                        (err: Error | null) => {
+                            if (err) {
+                                console.error('Failed to insert chunk:', err);
                             }
-                        );
-                    });
-                }).catch((error) => console.error('Store file failed:', error));
+                        }
+                    );
+                });
+            };
+
+            if (!fileId) {
+                this.storeFileContent(filePath, content)
+                    .then((newFileId) => {
+                        insertChunks(newFileId);
+                    })
+                    .catch((error) => console.error('Store file failed:', error));
             } else {
-                this.db.run('DELETE FROM file_chunks WHERE file_id = ?', [fileId], (err: Error | null) => {
-                    if (err) {
-                        console.error('Failed to delete old chunks:', err);
+                this.db.run('DELETE FROM file_chunks WHERE file_id = ?', [fileId], (delErr: Error | null) => {
+                    if (delErr) {
+                        console.error('Failed to delete old chunks:', delErr);
                         return;
                     }
-
-                    const chunks = this.smartChunkContent(content, extension);
-                    chunks.forEach((chunk: string, index: number) => {
-                        this.db.run(
-                            `INSERT INTO file_chunks (file_id, chunk_index, content) VALUES (?, ?, ?)`,
-                            [fileId, index, chunk],
-                            (err: Error | null) => {
-                                if (err) {
-                                    console.error('Failed to insert chunk:', err);
-                                }
-                            }
-                        );
-                    });
+                    insertChunks(fileId);
                 });
             }
         });
