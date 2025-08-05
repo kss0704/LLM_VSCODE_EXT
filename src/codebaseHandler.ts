@@ -255,7 +255,7 @@ export class CodebaseHandler {
 
                         const fileId = this.lastID;
                         
-                        // Delete old chunks
+                        // Use self (class instance) for all subsequent operations
                         self.db.run('DELETE FROM file_chunks WHERE file_id = ?', 
                             [fileId], 
                             (err: Error | null) => {
