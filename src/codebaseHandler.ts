@@ -20,6 +20,7 @@ interface FileInfo {
 export class CodebaseHandler {
   private db: Database;
   private encoding: any;
+  private excludedDirs = ['node_modules', 'out', '.git', '.vscode'];
 
   constructor(private storagePath: string) {
     const dbPath = path.join(this.storagePath, 'codebase.db');
@@ -141,7 +142,12 @@ export class CodebaseHandler {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory() && !['node_modules', 'out', '.git'].includes(entry.name)) {
+
+      if (this.excludedDirs.some(excluded => fullPath.includes(excluded))) {
+        continue; // Skip excluded directories
+      }
+
+      if (entry.isDirectory()) {
         await this.processDirectory(fullPath);
       } else if (entry.isFile()) {
         const content = fs.readFileSync(fullPath, 'utf8');
