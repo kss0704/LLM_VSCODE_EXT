@@ -1,0 +1,154 @@
+{
+  "name": "llm-code-assistant",
+  "displayName": "LLM Code Assistant",
+  "description": "Advanced code analysis and assistance with large codebase support",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Snippets"
+  ],
+  "keywords": [
+    "ai",
+    "llm",
+    "code assistant",
+    "groq",
+    "codebase analysis"
+  ],
+  "activationEvents": [
+    "onCommand:llmCodeAssistant.chat",
+    "onCommand:llmCodeAssistant.analyzeFile",
+    "onCommand:llmCodeAssistant.processWorkspace"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "llmCodeAssistant.chat",
+        "title": "Open Chat",
+        "category": "LLM Assistant"
+      },
+      {
+        "command": "llmCodeAssistant.analyzeFile",
+        "title": "Analyze Current File",
+        "category": "LLM Assistant"
+      },
+      {
+        "command": "llmCodeAssistant.processWorkspace",
+        "title": "Process Workspace",
+        "category": "LLM Assistant"
+      },
+      {
+        "command": "llmCodeAssistant.clearCache",
+        "title": "Clear Cache",
+        "category": "LLM Assistant"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "llmCodeAssistant.analyzeFile",
+          "when": "resourceExtname =~ /\\.(py|js|ts|java|cpp|c|go|rs|php|rb|swift|kt|html|css|sql|md|txt|json|xml|yml|yaml)$/",
+          "group": "llm-assistant"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "llmCodeAssistant.analyzeFile",
+          "when": "resourceExtname =~ /\\.(py|js|ts|java|cpp|c|go|rs|php|rb|swift|kt|html|css|sql|md|txt|json|xml|yml|yaml)$/",
+          "group": "llm-assistant"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "llmCodeAssistant.chatView",
+          "name": "LLM Code Assistant",
+          "when": "llmCodeAssistant.activated"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "llm-code-assistant",
+          "title": "LLM Code Assistant",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "LLM Code Assistant",
+      "properties": {
+        "llmCodeAssistant.groqApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Groq API Key for LLM requests",
+          "order": 1
+        },
+        "llmCodeAssistant.model": {
+          "type": "string",
+          "default": "llama-3.1-8b-instant",
+          "enum": [
+            "llama-3.1-8b-instant",
+            "llama-3.1-70b-versatile",
+            "llama-3.2-1b-preview",
+            "llama-3.2-3b-preview",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it"
+          ],
+          "description": "Groq model to use for completions",
+          "order": 2
+        },
+        "llmCodeAssistant.temperature": {
+          "type": "number",
+          "default": 0.1,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Temperature for LLM responses",
+          "order": 3
+        },
+        "llmCodeAssistant.maxTokens": {
+          "type": "number",
+          "default": 4000,
+          "minimum": 100,
+          "maximum": 8000,
+          "description": "Maximum tokens for responses",
+          "order": 4
+        },
+        "llmCodeAssistant.autoProcessWorkspace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically process workspace files on startup",
+          "order": 5
+        },
+        "llmCodeAssistant.maxFileSize": {
+          "type": "number",
+          "default": 10485760,
+          "description": "Maximum file size to process (in bytes)",
+          "order": 6
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "sqlite3": "^5.1.6",
+    "tiktoken": "^1.0.10"
+  }
+}
