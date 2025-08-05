@@ -238,13 +238,16 @@ export class CodebaseHandler {
                 
                 const fileType = this.determineFileType(extension);
 
+                // Capture class instance for use in callbacks
+                const self = this;
+
                 this.db.run(
                     `INSERT OR REPLACE INTO files 
                      (file_path, file_hash, extension, file_type, size, lines, tokens, priority, 
                       last_modified, is_processed, content_preview)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1, ?)`,
                     [filePath, fileHash, extension, fileType, stats.size, lines, totalTokens, priority, contentPreview],
-                    function(err) {
+                    function(this: any, err: Error | null) {
                         if (err) {
                             reject(err);
                             return;
@@ -253,43 +256,46 @@ export class CodebaseHandler {
                         const fileId = this.lastID;
                         
                         // Delete old chunks
-                        this.db.run('DELETE FROM file_chunks WHERE file_id = ?', [fileId], (err) => {
-                            if (err) {
-                                reject(err);
-                                return;
-                            }
+                        self.db.run('DELETE FROM file_chunks WHERE file_id = ?', 
+                            [fileId], 
+                            (err: Error | null) => {
+                                if (err) {
+                                    reject(err);
+                                    return;
+                                }
 
-                            // Create chunks
-                            const chunks = this.smartChunkContent(content, extension);
-                            let insertedChunks = 0;
+                                // Create chunks
+                                const chunks = self.smartChunkContent(content, extension);
+                                let insertedChunks = 0;
 
-                            if (chunks.length === 0) {
-                                resolve(true);
-                                return;
-                            }
+                                if (chunks.length === 0) {
+                                    resolve(true);
+                                    return;
+                                }
 
-                            chunks.forEach((chunk, index) => {
-                                const chunkHash = crypto.createHash('md5').update(chunk.content).digest('hex');
-                                
-                                this.db.run(
-                                    `INSERT INTO file_chunks 
-                                     (file_id, chunk_index, content, tokens, start_line, end_line, chunk_type, chunk_hash)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                                    [fileId, index, chunk.content, chunk.tokens, chunk.startLine, chunk.endLine, chunk.chunkType, chunkHash],
-                                    (err) => {
-                                        if (err) {
-                                            reject(err);
-                                            return;
+                                chunks.forEach((chunk, index) => {
+                                    const chunkHash = crypto.createHash('md5').update(chunk.content).digest('hex');
+                                    
+                                    self.db.run(
+                                        `INSERT INTO file_chunks 
+                                         (file_id, chunk_index, content, tokens, start_line, end_line, chunk_type, chunk_hash)
+                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                                        [fileId, index, chunk.content, chunk.tokens, chunk.startLine, chunk.endLine, chunk.chunkType, chunkHash],
+                                        (err: Error | null) => {
+                                            if (err) {
+                                                reject(err);
+                                                return;
+                                            }
+
+                                            insertedChunks++;
+                                            if (insertedChunks === chunks.length) {
+                                                resolve(true);
+                                            }
                                         }
-
-                                        insertedChunks++;
-                                        if (insertedChunks === chunks.length) {
-                                            resolve(true);
-                                        }
-                                    }
-                                );
-                            });
-                        });
+                                    );
+                                });
+                            }
+                        );
                     }
                 );
 
@@ -378,7 +384,7 @@ export class CodebaseHandler {
                  FROM files 
                  WHERE is_processed = 1 
                  ORDER BY priority DESC, tokens ASC`,
-                (err, rows: any[]) => {
+                (err: Error | null, rows: any[]) => {
                     if (err) {
                         reject(err);
                         return;
@@ -429,7 +435,7 @@ export class CodebaseHandler {
         return new Promise((resolve, reject) => {
             this.db.get(
                 'SELECT COUNT(*) as count, SUM(lines) as lines, SUM(tokens) as tokens FROM files WHERE is_processed = 1',
-                (err, row: any) => {
+                (err: Error | null, row: any) => {
                     if (err) {
                         reject(err);
                         return;
@@ -437,7 +443,7 @@ export class CodebaseHandler {
 
                     this.db.all(
                         'SELECT file_type, COUNT(*) as count FROM files WHERE is_processed = 1 GROUP BY file_type',
-                        (err, typeRows: any[]) => {
+                        (err: Error | null, typeRows: any[]) => {
                             if (err) {
                                 reject(err);
                                 return;
@@ -445,7 +451,7 @@ export class CodebaseHandler {
 
                             this.db.all(
                                 'SELECT extension, COUNT(*) as count FROM files WHERE is_processed = 1 GROUP BY extension',
-                                (err, extRows: any[]) => {
+                                (err: Error | null, extRows: any[]) => {
                                     if (err) {
                                         reject(err);
                                         return;
@@ -476,13 +482,13 @@ export class CodebaseHandler {
 
     async clearCache(): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.db.run('DELETE FROM file_chunks', (err) => {
+            this.db.run('DELETE FROM file_chunks', (err: Error | null) => {
                 if (err) {
                     reject(err);
                     return;
                 }
                 
-                this.db.run('DELETE FROM files', (err) => {
+                this.db.run('DELETE FROM files', (err: Error | null) => {
                     if (err) {
                         reject(err);
                         return;
