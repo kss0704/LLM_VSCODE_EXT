@@ -168,7 +168,7 @@ export class CodebaseHandler {
                  ORDER BY fc.tokens ASC
                  LIMIT ?`,
                 [filePath, maxChunks],
-                (err, rows) => {
+                (err: Error | null, rows: any[]) => {
                     if (err) {
                         reject(err);
                         return;
