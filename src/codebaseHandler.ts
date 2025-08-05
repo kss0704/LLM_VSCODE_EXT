@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
-import { Database } from 'sqlite3';
+import { Database, RunResult } from 'sqlite3';
 import { encoding_for_model } from 'tiktoken';
 
 interface FileInfo {
@@ -247,7 +247,7 @@ export class CodebaseHandler {
                       last_modified, is_processed, content_preview)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1, ?)`,
                     [filePath, fileHash, extension, fileType, stats.size, lines, totalTokens, priority, contentPreview],
-                    function(this: any, err: Error | null) {
+                    function(this: RunResult, err: Error | null) {
                         if (err) {
                             reject(err);
                             return;
@@ -273,7 +273,7 @@ export class CodebaseHandler {
                                     return;
                                 }
 
-                                chunks.forEach((chunk, index) => {
+                                chunks.forEach((chunk: ChunkInfo, index: number) => {
                                     const chunkHash = crypto.createHash('md5').update(chunk.content).digest('hex');
                                     
                                     self.db.run(
