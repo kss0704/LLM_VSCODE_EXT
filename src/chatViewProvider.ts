@@ -369,7 +369,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         </head>
         <body>
             <div class="header">
-                <h3>🤖 LLM Code Assistant</h3>
+                <h3>LLM Code Assistant</h3>
                 <div class="model-info">Using: ${modelInfo.name} (${modelInfo.context.toLocaleString()} tokens)</div>
             </div>
             
@@ -543,5 +543,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             </script>
         </body>
         </html>`;
+        
     }
 }
