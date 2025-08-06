@@ -1,9 +1,9 @@
 {
   "name": "llm-code-assistant",
   "displayName": "LLM Code Assistant",
-  "description": "Advanced code analysis and assistance with large codebase support",
+  "description": "Advanced code analysis and assistance with large codebase support and embedded Streamlit interface",
   "version": "1.0.0",
-  "publisher": "your-publisher-name",
+  "publisher": "Sai",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -17,20 +17,24 @@
     "llm",
     "code assistant",
     "groq",
-    "codebase analysis"
+    "codebase analysis",
+    "streamlit"
   ],
   "activationEvents": [
     "onCommand:llmCodeAssistant.chat",
     "onCommand:llmCodeAssistant.analyzeFile",
-    "onCommand:llmCodeAssistant.processWorkspace"
+    "onCommand:llmCodeAssistant.processWorkspace",
+    "onCommand:llmCodeAssistant.clearCache",
+    "onCommand:llmCodeAssistant.launchStreamlitApp"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "llmCodeAssistant.chat",
-        "title": "Open Chat",
-        "category": "LLM Assistant"
+        "command": "llmCodeAssistant.launchStreamlitApp",
+        "title": "Open Embedded Streamlit App",
+        "category": "LLM Assistant",
+        "icon": "$(browser)"
       },
       {
         "command": "llmCodeAssistant.analyzeFile",
@@ -62,13 +66,19 @@
           "when": "resourceExtname =~ /\\.(py|js|ts|java|cpp|c|go|rs|php|rb|swift|kt|html|css|sql|md|txt|json|xml|yml|yaml)$/",
           "group": "llm-assistant"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "llmCodeAssistant.launchStreamlitApp",
+          "title": "LLM Assistant: Open Embedded Streamlit App"
+        }
       ]
     },
     "views": {
-      "explorer": [
+      "llm-code-assistant": [
         {
           "id": "llmCodeAssistant.chatView",
-          "name": "LLM Code Assistant",
+          "name": "Chat Interface",
           "when": "llmCodeAssistant.activated"
         }
       ]
@@ -132,6 +142,12 @@
           "default": 10485760,
           "description": "Maximum file size to process (in bytes)",
           "order": 6
+        },
+        "llmCodeAssistant.streamlitPort": {
+          "type": "number",
+          "default": 8522,
+          "description": "Port for embedded Streamlit application",
+          "order": 7
         }
       }
     }
@@ -139,13 +155,19 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install"
+    "compile:watch": "tsc -p ./ --watch",
+    "watch": "tsc -p ./ --watch",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.74.0",
     "@types/node": "16.x",
-    "typescript": "^4.9.4"
+    "typescript": "^4.9.4",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0"
   },
   "dependencies": {
     "axios": "^1.6.0",
